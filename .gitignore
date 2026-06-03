@@ -1,0 +1,20 @@
+# Output files
+*_movies.csv
+*_movies.md
+*_movie_wish.csv
+*_movie_wish.md
+*_books.csv
+*_books.md
+*_book_wish.csv
+*_book_wish.md
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
