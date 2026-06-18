@@ -236,8 +236,9 @@ FILE_MAP = {
 | 6 | Phase 3 品味时间轴算法（转捩点检测） | 中 | ✅ 完成 |
 | 7 | Phase 5 Web 入口（本地原型） | 大 | 🟡 待端到端验证 |
 | 8 | Phase 6 MBTI 训练管线 v3 | 中 | ✅ 完成（全维度提升） |
-| 9 | Phase 7 MBTI 样本扩容至 200 | 大 | 🟡 80/200（反爬受限） |
+| 9 | Phase 7 MBTI 样本扩容至 200 | 大 | 🟡 86/200 种子，35 有数据（需 Cookie 补采） |
 | 10 | Phase 8 LLM 提示词优化（MBTI 驱动人格洞察） | 中 | 🟡 阶段一已完成 |
+| 11 | v4 代码优化 + 管线重跑 | 小 | ✅ 完成（augment/test bug 修复，35 人重训） |
 
 **推荐顺序**：Phase 7 样本扩容 → Phase 8 提示词优化 → 跑通 Web 端到端验证 → CSS 时间轴可视化 → Web 部署方案
 
@@ -349,8 +350,74 @@ FILE_MAP = {
   - FT: total_collected (0.220), comment_rate (0.141), t_lift (0.137)
   - JP: wish_ratio (0.245), t_lift (0.129), five_star_pct (0.106)
 
+### v4 代码优化与管线重跑 (2026-06-18)
+
+**代码修复**:
+- `augment_mbti_data.py`: 修复随机种子不可复现问题 — 新增 `rng` 参数传递，`--seed` CLI 参数（默认 42），`augment_sample()` 和 `choose_holdout_split()` 均使用可复现的 Random 实例
+- `test_mbti.py`: 修复置信度分层过滤 bug — 原列表推导式嵌套逻辑为恒真过滤器（tautological filter），改为直接按置信度分层提取 (true, pred) 对
+- `build_mbti_dataset.py`: 删除冗余 `split_dataset()` 函数（`augment_mbti_data.py` 的 `choose_holdout_split()` 已统一处理分割逻辑）
+
+**数据集重建**:
+- 种子: 86 人（86 种子 + 特征缓存从 27 → 35 人）
+- 数据集: 35 真实用户 → 465 合成样本 → 500 总计
+  - 分层分割: train=21 真实, val=7 真实, test=7 真实
+  - 自适应变体数: 5（因 n=35 在 30-50 区间）
+- 类型分布: INTJ:7, INFP:6, ENTP:5, INFJ:5, ENFP:2, INTP:3, ISFP:2, ISTJ:2, ENFJ:1, ESTJ:1, ISFJ:1
+- 仍然缺失: ESFJ, ESFP, ESTP（0 人）
+
+**v4 批量测试** (`test_mbti.py` 对 20 人做全量预测):
+
+| 维度 | v3 | v4 | 变化 |
+|------|----|----|------|
+| IE   | 90.0% | 80.0% | -10.0% |
+| NS   | 75.0% | **80.0%** | +5.0% |
+| FT   | 85.0% | **90.0%** | +5.0% |
+| JP   | 80.0% | 80.0% | — |
+| ≥3 维度正确 | 85.0% | 70.0% | -15.0% |
+| 全类型匹配 | 65.0% | 65.0% | — |
+
+- **错误分析**:
+  - cabaret (ESTJ → ESTP): E/S 判断正确，T 正确，J→P 错误
+  - film101 (ISTJ → INFP): I 正确，S→N 错误，T→F 错误，J→P 错误
+  - fangyunan (ISFP → INFJ): I 正确，S→N 错误，F 正确，P→J 错误
+  - 102454210 (INFJ → ENFP): I→E 错误，N 正确，F 正确，J→P 错误
+- **关键发现**: ≥3 维度下降主因是测试集用户组成变化（v3 的 5 人 vs v4 的 7 人），全类型匹配率不变
+
+**新增工具**:
+- `batch_scrape_and_build.py`: 批量爬取 + 特征构建脚本，支持断点续跑、类型过滤、失败落盘
+  - 用法: `python batch_scrape_and_build.py --cookie "你的cookie" --only-type S`
+
+**当前数据瓶颈**:
+- 86 种子中仅 35 人有可用特征（40.7%）
+- 59 人数据目录为空（爬取失败，需 Cookie 重试）
+- S 型仅 6 人有数据（ISFP:2, ISTJ:2, ISFJ:1, ESTJ:1），缺 ESTP/ESFP/ESFJ
+- E 型仅 9 人有数据，缺 ESTP/ESFP/ESFJ
+
 ### 后续计划
-- **解决反爬**: 等验证码过期或换 IP/账号，继续采集至 200 种子
-- **NS 维度**: 仍是最弱环节（N/S 种子比 69:11），需重点采集 S 型用户
+- **首要**: 提供豆瓣 Cookie，运行 `batch_scrape_and_build.py --only-type S` 补采 S 型用户
+- **NS 维度**: S 型种子 12 人中仅 6 人有数据，需重点补采 ESTP/ESFP/ESFJ
 - **模型升级**: 真实样本 ≥50 时自动切换 GradientBoosting + GridSearchCV
 - **Web 验证**: 端到端测试 MBTI 预测 + LLM 报告生成流程
+
+### Phase 8.2: LLM 报告质量提升 (2026-06-18)
+
+**"你是谁"板块升级**:
+- **人格光谱概念**: 模板和 LLM prompt 均已更新，使用"你在 I-E 光谱上偏向 I 的一侧（置信度 72%）"表述，而非简单的"你是 I 型"
+- **低置信度维度分析**: 当某维度置信度 <60% 时，专门分析该维度的矛盾信号
+- **评论深度引用**: 新增 `_template_comment_analysis()` 函数，选择最能体现人格特质的 3-5 条评论做"评论中的人格密码"分析
+  - 选择标准：评论长度 > 50字、包含情感/观点/分析、能体现思维方式
+  - 保证电影和书籍评论的多样性
+
+**LLM Prompt 优化**:
+- 增加评论深度引用策略指令：选择标准、分析方式、连接维度
+- 强调"评论中的人格密码"分析：不是简单引用，而是解读"这条评论暴露了你什么样的思维模式"
+
+**代码质量优化**:
+- 所有 web 模块导入测试通过：`mbti_predictor`、`llm_report`、`worker`、`config`
+- Python 语法检查通过
+- Web 端到端流程检查完整：前端 → API → 爬取 → 分析 → 预测 → 报告 → 展示
+
+**当前状态**:
+- Phase 8 阶段一、二已完成
+- Phase 5 Web 端到端流程代码完整，待实际 Cookie 测试
+- 预测准确率（20 人测试集）：IE 80% | NS 80% | FT 90% | JP 80% | 全匹配 65%

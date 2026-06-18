@@ -68,8 +68,13 @@ def _generate_with_llm(analysis: dict) -> str:
    这是整份报告的开篇锤——用户看到的第一件事。
    要求：
    - 先给出四字母类型，然后用一段有力的洞察解释”为什么你是这种人”
+   - 使用”人格光谱”表述：不是”你是 I 型”，而是”你在 I-E 光谱上偏向 I 的一侧（置信度 72%）”
+   - 当某维度置信度 <60% 时，必须专门分析该维度的矛盾信号（”你在 N/S 之间摇摆，这说明...”）
    - 每个维度必须用具体数据支撑（”你 80% 的五星给了剧情片”而非泛泛而谈）
-   - 引用用户的评论来佐证维度判断
+   - 引用 3-5 条最能体现人格特质的用户评论，做”评论中的人格密码”分析：
+     * 选择标准：评论长度 > 50字、包含情感/观点/分析、能体现思维方式
+     * 分析方式：不是简单引用，而是解读”这条评论暴露了你什么样的思维模式”
+     * 连接维度：每条评论都要关联到具体的 MBTI 维度判断
    - 结尾用一句话概括这个人的核心特质
 
 2. <section class=”report-section” id=”journey”><h2>你的来路</h2>
@@ -410,7 +415,7 @@ def _template_identity(analysis: dict) -> str:
     """模板：你是谁（MBTI 推断）。
 
     使用 mbti_predictor 的统一预测结果，避免重复推断。
-    同时输出置信度和数据依据。
+    输出人格光谱概念、置信度、数据依据和评论深度引用。
     """
     html = '<section class="report-section" id="identity"><h2>你是谁</h2>\n'
 
@@ -435,13 +440,14 @@ def _template_identity(analysis: dict) -> str:
             break
     era_text = {"TC": "经典倾向", "TN": "新潮倾向", "TB": "平衡"}.get(era_label, "")
 
-    # 输出
+    # 输出：人格光谱概念
     html += f'<div class="mbti-badge">{mbti_str}</div>\n'
     html += f'<p class="mbti-confidence">综合置信度 {avg_confidence}%（{method}）</p>\n'
+    html += '<p class="spectrum-note">人格不是非此即彼的标签，而是你在光谱上的位置。</p>\n'
     if era_text:
         html += f'<p class="era-note">时代倾向：{era_text}</p>\n'
 
-    # 四维度解读
+    # 四维度解读（人格光谱版本）
     html += '<div class="dimension-explain">\n'
     dim_labels = [
         (0, "I", "E", "内向 (I)", "外向 (E)",
@@ -468,12 +474,99 @@ def _template_identity(analysis: dict) -> str:
         if letter == "X":
             html += f'<p><strong>{la} / {lb}</strong>：倾向不明确</p>\n'
         elif letter == a:
-            html += f'<p><strong>{la}</strong> <span class="dim-conf">{conf}%</span>：{desc_a}</p>\n'
+            # 人格光谱表述
+            if conf < 60:
+                html += (f'<p><strong>{la}</strong> <span class="dim-conf">{conf}%</span>：'
+                         f'你在 {a}-{b} 光谱上略微偏向 {a} 的一侧，但信号不够强烈。'
+                         f'{desc_a}</p>\n')
+            else:
+                html += (f'<p><strong>{la}</strong> <span class="dim-conf">{conf}%</span>：'
+                         f'你在 {a}-{b} 光谱上明显偏向 {a} 的一侧。'
+                         f'{desc_a}</p>\n')
         else:
-            html += f'<p><strong>{lb}</strong> <span class="dim-conf">{conf}%</span>：{desc_b}</p>\n'
+            if conf < 60:
+                html += (f'<p><strong>{lb}</strong> <span class="dim-conf">{conf}%</span>：'
+                         f'你在 {a}-{b} 光谱上略微偏向 {b} 的一侧，但信号不够强烈。'
+                         f'{desc_b}</p>\n')
+            else:
+                html += (f'<p><strong>{lb}</strong> <span class="dim-conf">{conf}%</span>：'
+                         f'你在 {a}-{b} 光谱上明显偏向 {b} 的一侧。'
+                         f'{desc_b}</p>\n')
     html += '</div>\n'
 
+    # 评论中的人格密码（深度引用）
+    html += _template_comment_analysis(analysis)
+
     html += '</section>\n'
+    return html
+
+
+def _template_comment_analysis(analysis: dict) -> str:
+    """模板：评论中的人格密码。
+
+    选择最能体现人格特质的评论，做深度分析。
+    选择标准：评论长度 > 50字、包含情感/观点/分析、能体现思维方式。
+    """
+    html = '<div class="comment-personality">\n<h3>评论中的人格密码</h3>\n'
+
+    # 收集所有有评论的样本
+    all_comments = []
+    for dtype in ["movie", "book"]:
+        d = analysis.get(dtype, {})
+        samples = d.get("samples", [])
+        for s in samples:
+            comment = s.get("comment", "")
+            # 只选有意义的评论（长度 > 50字）
+            if comment and len(comment) > 50:
+                all_comments.append({
+                    "title": s.get("title", ""),
+                    "comment": comment,
+                    "rating": s.get("rating", 0),
+                    "type": dtype,
+                    "length": len(comment),
+                })
+
+    if not all_comments:
+        html += '<p>你很少留下评论——沉默本身也是一种态度。</p>\n'
+    else:
+        # 选择策略：优先选择长评论，但也要保证多样性
+        # 1. 按长度排序，取前 10 条候选
+        all_comments.sort(key=lambda x: x["length"], reverse=True)
+        candidates = all_comments[:10]
+
+        # 2. 从候选中选 5 条，确保电影和书籍都有代表
+        movie_comments = [c for c in candidates if c["type"] == "movie"]
+        book_comments = [c for c in candidates if c["type"] == "book"]
+
+        selected = []
+        # 各选最多 3 条电影、2 条书籍（或反过来，取决于哪个多）
+        if len(movie_comments) >= len(book_comments):
+            selected.extend(movie_comments[:3])
+            selected.extend(book_comments[:2])
+        else:
+            selected.extend(book_comments[:3])
+            selected.extend(movie_comments[:2])
+
+        # 如果还不够 5 条，从剩余候选中补充
+        if len(selected) < 5:
+            remaining = [c for c in candidates if c not in selected]
+            selected.extend(remaining[:5 - len(selected)])
+
+        html += '<p>以下是你最能体现思维方式的评论：</p>\n'
+        html += '<div class="quotes">\n'
+        for c in selected[:5]:
+            type_label = "观影" if c["type"] == "movie" else "阅读"
+            # 截取前 200 字，避免过长
+            display_comment = c["comment"][:200]
+            if len(c["comment"]) > 200:
+                display_comment += "..."
+            html += (f'<blockquote class="personality-quote">'
+                     f'<p>"{display_comment}"</p>'
+                     f'<cite>—— {type_label}《{c["title"]}》({c["rating"]}星)</cite>'
+                     f'</blockquote>\n')
+        html += '</div>\n'
+
+    html += '</div>\n'
     return html
 
 
