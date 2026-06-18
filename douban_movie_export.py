@@ -33,18 +33,24 @@ URLS = {
         "collect": "https://book.douban.com/people/{user}/collect",   # 已读
         "wish":    "https://book.douban.com/people/{user}/wish",      # 想读
     },
+    "music": {
+        "collect": "https://music.douban.com/people/{user}/collect",  # 已听
+        "wish":    "https://music.douban.com/people/{user}/wish",     # 想听
+    },
 }
 
 # 每个类型对应的标签文字
 LABELS = {
     "movie": {"collect": "已看", "wish": "想看", "unit": "部"},
     "book":  {"collect": "已读", "wish": "想读", "unit": "本"},
+    "music": {"collect": "已听", "wish": "想听", "unit": "张"},
 }
 
 # 输出文件名后缀
 SUFFIXES = {
     "movie": {"collect": "movies", "wish": "movie_wish"},
     "book":  {"collect": "books",  "wish": "book_wish"},
+    "music": {"collect": "music",  "wish": "music_wish"},
 }
 
 PAGE_SIZE = 30
@@ -60,7 +66,8 @@ HEADERS = {
     "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
 }
 
-OUTPUT_DIR = Path(__file__).resolve().parent
+OUTPUT_DIR = Path(__file__).resolve().parent / "result"
+OUTPUT_DIR.mkdir(exist_ok=True)
 
 
 # ── 抓取 ──────────────────────────────────────────────────────
@@ -150,7 +157,7 @@ def parse_items(html: str) -> list[dict]:
     return items
 
 
-def scrape_all(session: requests.Session, url: str, label: str) -> list[dict]:
+def scrape_all(session: requests.Session, url: str, label: str, unit: str = "部") -> list[dict]:
     """逐页抓取，按 link 去重。"""
     all_items: list[dict] = []
     seen_links: set[str] = set()
@@ -176,7 +183,7 @@ def scrape_all(session: requests.Session, url: str, label: str) -> list[dict]:
             if key not in seen_links:
                 seen_links.add(key)
                 new_items.append(item)
-        print(f"获取 {len(items)} 部 (新增 {len(new_items)})")
+        print(f"获取 {len(items)} {unit} (新增 {len(new_items)})")
         all_items.extend(new_items)
 
         # 页返回量不足 PAGE_SIZE 时仍可能有下一页，用宽松阈值判断
@@ -234,12 +241,12 @@ def export_markdown(items: list[dict], filepath: Path, title: str = "列表",
 # ── 入口 ──────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="豆瓣记录导出工具（电影 + 图书）")
+    parser = argparse.ArgumentParser(description="豆瓣记录导出工具（电影 + 图书 + 音乐）")
     parser.add_argument("user", help="豆瓣用户 ID（URL 中 /people/ 后面的部分）")
     parser.add_argument("--cookie", default="",
                         help="浏览器 Cookie 字符串（可选，绕过访问限制）")
-    parser.add_argument("--type", default="all", choices=["movie", "book", "all"],
-                        help="导出类型: movie=仅电影, book=仅图书, all=全部 (默认 all)")
+    parser.add_argument("--type", default="all", choices=["movie", "book", "music", "all"],
+                        help="导出类型: movie=仅电影, book=仅图书, music=仅音乐, all=全部 (默认 all)")
     args = parser.parse_args()
 
     session = requests.Session()
@@ -247,11 +254,15 @@ def main():
         session.headers["Cookie"] = args.cookie
 
     # 确定要抓取的类型
-    types = ["movie", "book"] if args.type == "all" else [args.type]
+    types = ["movie", "book", "music"] if args.type == "all" else [args.type]
+
+    # 类型 → 中文列名/标签映射
+    NAME_COLS = {"movie": "片名", "book": "书名", "music": "专辑名"}
+    TYPE_LABELS = {"movie": "电影", "book": "图书", "music": "音乐"}
 
     for dtype in types:
-        name_col = "片名" if dtype == "movie" else "书名"
-        type_label = "电影" if dtype == "movie" else "图书"
+        name_col = NAME_COLS[dtype]
+        type_label = TYPE_LABELS[dtype]
         unit = LABELS[dtype]["unit"]
 
         for category in ["collect", "wish"]:
@@ -262,7 +273,7 @@ def main():
             print(f"\n{'='*50}")
             print(f"[*] 抓取用户 {args.user} 的「{label}」{type_label}...")
             print(f"{'='*50}\n")
-            items = scrape_all(session, url, label)
+            items = scrape_all(session, url, label, unit=unit)
 
             if not items:
                 print(f"  [!] 「{label}」无数据，跳过。")

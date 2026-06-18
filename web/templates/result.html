@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ task.user_id }} · Douban Insight</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% if loading %}
+    <meta http-equiv="refresh" content="3">
+    {% endif %}
+</head>
+
+<body>
+    <div class="container">
+        <header class="hero hero-small">
+            <h1 class="title"><a href="/" class="title-link">Douban Insight</a></h1>
+            <p class="subtitle">{{ task.user_id }} · 认识你自己</p>
+            <div class="hero-divider"></div>
+        </header>
+
+        {% if loading %}
+        <div class="progress-panel">
+            <div class="progress-header">
+                <span class="phase-label">{{ task.message or "分析中..." }}</span>
+            </div>
+            <div class="activity-indicator">
+                <span class="activity-dot"></span>
+                <span class="activity-dot"></span>
+                <span class="activity-dot"></span>
+                <span class="activity-text">正在工作...</span>
+            </div>
+            <p class="loading-note">页面将自动刷新，请稍候...</p>
+        </div>
+
+        {% elif error %}
+        <div class="error-panel">
+            <h3>分析失败</h3>
+            <p>{{ error }}</p>
+            <a href="/" class="btn-secondary">返回首页</a>
+        </div>
+
+        {% else %}
+        <div class="report-container">
+            <div class="report-actions">
+                <a href="/api/download/report/{{ task_id }}" class="btn-outline">下载报告</a>
+                <a href="/api/download/card/{{ task_id }}" class="btn-outline">下载社交卡片</a>
+                <a href="/" class="btn-outline">分析另一位用户</a>
+            </div>
+
+            <div class="report-content" id="report-content">
+                {% if report_html %}
+                {{ report_html|safe }}
+                {% else %}
+                <p style="text-align:center; color: #999;">报告内容未找到。</p>
+                {% endif %}
+            </div>
+
+            {% if analysis %}
+            {% set mbti = analysis.get('mbti_prediction', {}) %}
+            {% if mbti and mbti.get('mbti') %}
+            <div class="mbti-prediction">
+                <h2>MBTI 人格预测</h2>
+                <div class="mbti-result">
+                    <div class="mbti-type">{{ mbti.mbti }}</div>
+                    <div class="mbti-confidence">置信度 {{ "%.0f"|format(mbti.confidence * 100) }}%</div>
+                    <div class="mbti-method">{{ mbti.method }}</div>
+                </div>
+                <div class="mbti-dimensions">
+                    {% for dim, label in [('IE', '内向/外向'), ('NS', '直觉/感觉'), ('FT', '情感/思维'), ('JP', '判断/感知')] %}
+                    {% set d = mbti.dimensions.get(dim, {}) %}
+                    {% if d %}
+                    <div class="mbti-dim">
+                        <span class="mbti-dim-label">{{ label }}</span>
+                        <span class="mbti-dim-letter">{{ d.letter }}</span>
+                        <span class="mbti-dim-conf">{{ "%.0f"|format(d.confidence * 100) }}%</span>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="data-overview">
+                <h2>数据概览</h2>
+                <div class="overview-grid">
+                    {% for dtype, label in [('movie', '观影'), ('book', '阅读'), ('music', '聆听')] %}
+                    {% set d = analysis.get(dtype, {}) %}
+                    {% if d and d.get('collected_count') %}
+                    <div class="overview-card">
+                        <h3>{{ label }}</h3>
+                        <div class="overview-stats">
+                            <div class="stat">
+                                <span class="stat-value">{{ d.get('collected_count', 0) }}</span>
+                                <span class="stat-label">已记录</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">{{ d.get('avg_rating', '—') }}</span>
+                                <span class="stat-label">均分</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">{{ d.get('wish_count', 0) }}</span>
+                                <span class="stat-label">想看/读</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="report-footer">
+                <p>由 <strong>Douban Insight</strong> 生成 · {{ task.created_at[:10] if task.created_at else '' }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <footer class="footer">
+            <p>Douban Insight</p>
+        </footer>
+    </div>
+</body>
+
+</html>

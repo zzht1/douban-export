@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Douban Insight — 书影音分析</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <header class="hero">
+            <svg class="hero-icon" viewBox="0 0 120 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M60 8 L100 32 L20 32 Z" stroke="#52b047" stroke-width="1.5" fill="none" opacity="0.5" />
+                <rect x="28" y="32" width="64" height="2" rx="1" fill="#52b047" opacity="0.3" />
+                <line x1="34" y1="34" x2="34" y2="56" stroke="#52b047" stroke-width="2" opacity="0.4" />
+                <line x1="47" y1="34" x2="47" y2="56" stroke="#52b047" stroke-width="2" opacity="0.4" />
+                <line x1="60" y1="34" x2="60" y2="56" stroke="#52b047" stroke-width="2" opacity="0.4" />
+                <line x1="73" y1="34" x2="73" y2="56" stroke="#52b047" stroke-width="2" opacity="0.4" />
+                <line x1="86" y1="34" x2="86" y2="56" stroke="#52b047" stroke-width="2" opacity="0.4" />
+                <rect x="24" y="56" width="72" height="3" rx="1.5" fill="#52b047" opacity="0.25" />
+                <rect x="20" y="59" width="80" height="3" rx="1.5" fill="#52b047" opacity="0.15" />
+                <path d="M60 20 Q57 24 58 28 Q60 25 62 28 Q63 24 60 20Z" fill="#52b047" opacity="0.35">
+                    <animate attributeName="opacity" values="0.25;0.5;0.25" dur="2.5s" repeatCount="indefinite" />
+                </path>
+            </svg>
+            <h1 class="title">Douban Insight</h1>
+            <p class="subtitle">γνῶθι σεαυτόν — 认识你自己</p>
+            <div class="hero-divider"></div>
+        </header>
+
+        <main class="input-card">
+            <form id="analyze-form" autocomplete="off">
+                <div class="field">
+                    <label for="user-input">豆瓣用户</label>
+                    <input type="text" id="user-input" name="user" placeholder="输入用户名或粘贴豆瓣主页链接" required>
+                    <span class="hint">支持纯 ID（如 1234567）、主页链接、或任何 douban.com/people/xxx 格式的 URL</span>
+                </div>
+
+                <details class="cookie-section">
+                    <summary>Cookie 设置（可选）</summary>
+                    <div class="field">
+                        <textarea id="cookie-input" name="cookie" placeholder="从浏览器开发者工具复制 Cookie 字符串粘贴到此处"
+                            rows="3"></textarea>
+                        <span class="hint">
+                            若爬取遇到 403 错误，需提供豆瓣登录 Cookie。
+                            <a href="#" onclick="showCookieHelp(); return false;">如何获取？</a>
+                        </span>
+                    </div>
+                </details>
+
+                <button type="submit" class="btn-primary" id="submit-btn">
+                    <span class="btn-text">开始分析</span>
+                    <span class="btn-loading" style="display:none;">分析中...</span>
+                </button>
+            </form>
+        </main>
+
+        <!-- 进度区域 -->
+        <div class="progress-panel" id="progress-panel" style="display:none;">
+            <div class="progress-header">
+                <span class="phase-label" id="phase-label">准备中...</span>
+            </div>
+            <div class="phase-timeline" id="phase-timeline">
+                <div class="phase-node" data-stage="scraping_movie">
+                    <span class="phase-dot"></span>
+                    <span class="phase-name">电影</span>
+                </div>
+                <div class="phase-connector"></div>
+                <div class="phase-node" data-stage="scraping_book">
+                    <span class="phase-dot"></span>
+                    <span class="phase-name">图书</span>
+                </div>
+                <div class="phase-connector"></div>
+                <div class="phase-node" data-stage="scraping_music">
+                    <span class="phase-dot"></span>
+                    <span class="phase-name">音乐</span>
+                </div>
+                <div class="phase-connector"></div>
+                <div class="phase-node" data-stage="analyzing">
+                    <span class="phase-dot"></span>
+                    <span class="phase-name">分析</span>
+                </div>
+                <div class="phase-connector"></div>
+                <div class="phase-node" data-stage="generating_report">
+                    <span class="phase-dot"></span>
+                    <span class="phase-name">报告</span>
+                </div>
+            </div>
+            <div class="activity-indicator" id="activity-indicator">
+                <span class="activity-dot"></span>
+                <span class="activity-dot"></span>
+                <span class="activity-dot"></span>
+                <span class="activity-text" id="activity-text">正在工作...</span>
+            </div>
+            <div class="log-area" id="log-area"></div>
+        </div>
+
+        <!-- 错误提示 -->
+        <div class="error-panel" id="error-panel" style="display:none;">
+            <h3>分析失败</h3>
+            <p id="error-message"></p>
+            <button onclick="location.reload()" class="btn-secondary">重试</button>
+        </div>
+
+        <footer class="footer">
+            <p class="privacy-notice">
+                本工具仅读取你的豆瓣公开标记数据，分析结果保存在本地服务器。
+                你可以随时<a href="#" onclick="showDeleteDialog(); return false;">删除你的数据</a>。
+            </p>
+            <p>Douban Insight</p>
+        </footer>
+    </div>
+
+    <!-- Cookie 帮助弹窗 -->
+    <div class="modal-overlay" id="cookie-help-modal" style="display:none;" onclick="hideCookieHelp()">
+        <div class="modal modal-wide" onclick="event.stopPropagation()">
+            <h3>如何获取豆瓣 Cookie</h3>
+            <p class="modal-intro">只需 3 步，大约 1 分钟：</p>
+
+            <div class="cookie-step">
+                <div class="cookie-step-header"><span class="step-num">1</span>登录豆瓣，打开开发者工具</div>
+                <p>打开 <a href="https://book.douban.com/subject/4908885" target="_blank">任意豆瓣条目页</a>，按 <kbd>F12</kbd>
+                    键，点击顶部的 <strong>Network</strong> 标签。</p>
+                <img src="/static/img/cookie_step1_network.png" alt="开发者工具 Network 标签" class="step-img">
+            </div>
+
+            <div class="cookie-step">
+                <div class="cookie-step-header"><span class="step-num">2</span>刷新页面，找到请求</div>
+                <p>点击左上角 <span class="icon-clear" title="清除按钮">⊘</span> 清除旧记录，然后按 <kbd>F5</kbd> 刷新。在请求列表中找到包含你 ID 的那条（如
+                    <code>4908885/</code>），点进去。
+                </p>
+                <img src="/static/img/cookie_step2_dbcl2.png" alt="找到 dbcl2 Cookie" class="step-img">
+            </div>
+
+            <div class="cookie-step">
+                <div class="cookie-step-header"><span class="step-num">3</span>复制 Cookie</div>
+                <p>在右侧 <strong>Request Headers</strong> 中找到 <code>cookie:</code> 那一行，复制其中 <code>dbcl2="xxx:xxx"</code>
+                    的值（不含分号）。或者也可以复制整行 cookie 字符串。</p>
+            </div>
+
+            <button onclick="hideCookieHelp()" class="btn-secondary">知道了</button>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+
+</html>

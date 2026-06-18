@@ -1,12 +1,10 @@
-# Output files
-*_movies.csv
-*_movies.md
-*_movie_wish.csv
-*_movie_wish.md
-*_books.csv
-*_books.md
-*_book_wish.csv
-*_book_wish.md
+# Data (training data, user CSVs, model artifacts)
+data/
+result/
+web/models/
+
+# Research data
+research/
 
 # Python
 __pycache__/
@@ -18,3 +16,26 @@ Thumbs.db
 
 # Environment
 .env
+
+# Debug output
+debug_*.html
+# Output
+result/
+
+# Research data
+research/research_summary.json
+research/upgrade_memo.md
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+
+# Local debug output
+debug_group.html
